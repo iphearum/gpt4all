@@ -235,8 +235,6 @@ class GPT4All():
                                          default_prompt_header=default_prompt_header,
                                          default_prompt_footer=default_prompt_footer)
         if verbose:
-            # text = self.remove_until_word(full_prompt,"Prompt:")
-            # print(f"### {text}\n")
             print(full_prompt)
 
         response = self.model.prompt_model(

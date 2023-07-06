@@ -12,7 +12,6 @@ models = [
     # finished
     # {"filename": "ggml-mpt-7b-instruct.bin"},
     # {"filename": "ggml-v3-13b-hermes-q5_1.bin"},
-    # {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
     {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
 
     # needed for download
@@ -42,10 +41,9 @@ class ChatGPT(Resource):
 
     def post(self):
         args = request.json
-        print(args)
         for msg in args:
             self.messages.append(msg)
-        response = gpt.chat_completion(self.messages, default_prompt_header=False)
+        response = gpt.chat_completion(self.messages, default_prompt_header=False, streaming=True)
         # return Response(response)
         response["model"] = 'gpt-4'
         # return response
