@@ -1,6 +1,6 @@
 # docker build -t api_ai_chatbot:tag -f Dockerfile . #1337
 GPT="gpt4free"
-docker image build -t ${GPT}:tag . #5000
+docker image build -t ${GPT}:tag -f Dockerfile . #5000
 
 # docker run -d -p 5000 api_ai_chatbot:tag
 docker stop $(docker ps -a -q)
