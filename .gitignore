@@ -3,6 +3,6 @@ app.py
 app-*.py
 gpt4.py
 *.ipynb
-gpt4
+gpt4bin
 __pycache__
 models
