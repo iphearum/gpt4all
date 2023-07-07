@@ -1,0 +1,2 @@
+[console_scripts]
+pyllamacpp = pyllamacpp.cli:main
