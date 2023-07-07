@@ -18,7 +18,8 @@ models = [
     # {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
 
     # needed for download
-    {"filename": "ggml-gpt4all-l13b-snoozy.bin"},
+    # {"filename": "ggml-gpt4all-l13b-snoozy.bin"},
+    {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
     # {"filename": "ggml-mpt-7b-chat.bin"},
 ]
 MODELPATH = "../models/gpt4all/"
@@ -59,7 +60,7 @@ def chat_completions():
                     'id': f'chatcmpl-{completion_id}',
                     'object': 'chat.completion.chunk',
                     'created': completion_timestamp,
-                    'model': model,
+                    'model': 'gpt-4',
                     'choices': [
                         {
                             'delta': {
@@ -76,11 +77,6 @@ def chat_completions():
 
         return app.response_class(stream(), mimetype='text/event-stream')
 
-
-def output(chunk):
-    if b'"youChatToken"' in chunk:
-        chunk_json = json.loads(chunk.decode().split('data: ')[1])
-        print(chunk_json['youChatToken'], flush=True, end = '')
 
 if __name__ == '__main__':
     config = {
