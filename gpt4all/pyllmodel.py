@@ -6,7 +6,9 @@ import queue
 import re
 import subprocess
 import sys
+import json
 import threading
+from typing import Iterable
 
 class DualStreamProcessor:
     def __init__(self, stream=None):
@@ -125,6 +127,7 @@ class LLModel:
     def __init__(self):
         self.model = None
         self.model_name = None
+        self.context = None
 
     def __del__(self):
         if self.model is not None:
@@ -168,6 +171,45 @@ class LLModel:
         if not llmodel.llmodel_isModelLoaded(self.model):
             raise Exception("Model not loaded")
         return llmodel.llmodel_threadCount(self.model)
+    
+    def _set_context(
+        self,
+        n_predict: int = 4096,
+        top_k: int = 40,
+        top_p: float = 0.9,
+        temp: float = 0.1,
+        n_batch: int = 8,
+        repeat_penalty: float = 1.2,
+        repeat_last_n: int = 10,
+        context_erase: float = 0.75,
+        reset_context: bool = False,
+    ):
+        if self.context is None:
+            self.context = LLModelPromptContext(
+                logits_size=0,
+                tokens_size=0,
+                n_past=0,
+                n_ctx=0,
+                n_predict=n_predict,
+                top_k=top_k,
+                top_p=top_p,
+                temp=temp,
+                n_batch=n_batch,
+                repeat_penalty=repeat_penalty,
+                repeat_last_n=repeat_last_n,
+                context_erase=context_erase,
+            )
+        elif reset_context:
+            self.context.n_past = 0
+
+        self.context.n_predict = n_predict
+        self.context.top_k = top_k
+        self.context.top_p = top_p
+        self.context.temp = temp
+        self.context.n_batch = n_batch
+        self.context.repeat_penalty = repeat_penalty
+        self.context.repeat_last_n = repeat_last_n
+        self.context.context_erase = context_erase
 
     def prompt_model(self, 
                      prompt: str,
@@ -306,6 +348,70 @@ class LLModel:
                                         ResponseCallback(_generator_response_callback), 
                                         RecalculateCallback(self._recalculate_callback), 
                                         context))
+        thread.start()
+
+        # Generator
+        while True:
+            response = output_queue.get()
+            if response == TERMINATING_SYMBOL:
+                break
+            yield response
+    
+    def prompt_model_streaming(
+        self,
+        prompt: str,
+        n_predict: int = 4096,
+        top_k: int = 40,
+        top_p: float = 0.9,
+        temp: float = 0.1,
+        n_batch: int = 8,
+        repeat_penalty: float = 1.2,
+        repeat_last_n: int = 10,
+        context_erase: float = 0.75,
+        reset_context: bool = False,
+    ) -> Iterable:
+        # Symbol to terminate from generator
+        TERMINATING_SYMBOL = "#TERMINATE#"
+
+        output_queue = queue.Queue()
+
+        prompt = prompt.encode('utf-8')
+        prompt = ctypes.c_char_p(prompt)
+
+        self._set_context(
+            n_predict=n_predict,
+            top_k=top_k,
+            top_p=top_p,
+            temp=temp,
+            n_batch=n_batch,
+            repeat_penalty=repeat_penalty,
+            repeat_last_n=repeat_last_n,
+            context_erase=context_erase,
+            reset_context=reset_context,
+        )
+
+        # Put response tokens into an output queue
+        def _generator_response_callback(token_id, response):
+            output_queue.put(response.decode('utf-8', 'replace'))
+            return True
+
+        def run_llmodel_prompt(model, prompt, prompt_callback, response_callback, recalculate_callback, context):
+            llmodel.llmodel_prompt(model, prompt, prompt_callback, response_callback, recalculate_callback, context)
+            output_queue.put(TERMINATING_SYMBOL)
+
+        # Kick off llmodel_prompt in separate thread so we can return generator
+        # immediately
+        thread = threading.Thread(
+            target=run_llmodel_prompt,
+            args=(
+                self.model,
+                prompt,
+                PromptCallback(self._prompt_callback),
+                ResponseCallback(_generator_response_callback),
+                RecalculateCallback(self._recalculate_callback),
+                self.context,
+            ),
+        )
         thread.start()
 
         # Generator

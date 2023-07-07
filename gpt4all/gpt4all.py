@@ -5,7 +5,7 @@ import json
 import os
 from pathlib import Path
 import time
-from typing import Dict, List
+from typing import Dict, Iterable, List, Union
 
 import requests
 from tqdm import tqdm
@@ -16,6 +16,9 @@ from . import pyllmodel
 DEFAULT_MODEL_DIRECTORY = os.path.join(
     str(Path.home()), ".cache", "gpt4all").replace("\\", "\\\\")
 
+global ownprompt
+
+ownprompt = "You are Open Brain, an AI managed by Mr.Phearum that using a huge language model (GPT-4) trained by OpenAI. Carefully follow the user's instructions. Respond using markdown."
 
 class GPT4All():
     """Python API for retrieving and interacting with GPT4All models.
@@ -24,7 +27,7 @@ class GPT4All():
         model: Pointer to underlying C model.
     """
 
-    def __init__(self, model_name: str, model_path: str = None, model_type: str = None, allow_download=True):
+    def __init__(self, model_name: str, model_path: str = None, model_type: str = None, allow_download=True, n_threads=None):
         """
         Constructor
 
@@ -42,6 +45,13 @@ class GPT4All():
         model_dest = self.retrieve_model(
             model_name, model_path=model_path, allow_download=allow_download)
         self.model.load_model(model_dest)
+        # Set n_threads
+        if n_threads is not None:
+            self.model.set_thread_count(n_threads)
+
+        self._is_chat_session_activated = False
+        self.current_chat_session = []
+        self.full_prompt = ""
 
     @staticmethod
     def list_models():
@@ -167,36 +177,93 @@ class GPT4All():
         if verbose:
             print("Model downloaded at: ", download_path)
         return download_path
+    
+    def _format_chat_prompt_template(
+        self, messages: List[Dict], default_prompt_header=True, default_prompt_footer=True
+    ) -> str:
+        
+        return self._build_prompt(messages=messages, default_prompt_footer=default_prompt_header, default_prompt_header=default_prompt_footer)
 
     # TODO: this naming is just confusing now and needs to be deprecated now that we have generator
     # Need to better consolidate all these different model response methods
-    def generate(self, prompt: str, streaming: bool = True, **generate_kwargs) -> str:
+    def generate(
+        self,
+        prompt: str = '',
+        messages: List[Dict] = [],
+        max_tokens: int = 200,
+        temp: float = 0.7,
+        top_k: int = 40,
+        top_p: float = 0.1,
+        repeat_penalty: float = 1.18,
+        repeat_last_n: int = 64,
+        n_batch: int = 8,
+        n_predict: int = None,
+        streaming: bool = False,
+    ) -> Union[str, Iterable]:
         """
-        Surfaced method of running generate without accessing model object.
+        Generate outputs from any GPT4All model.
 
         Args:
-            prompt: Raw string to be passed to model.
-            streaming: True if want output streamed to stdout.
-            **generate_kwargs: Optional kwargs to pass to prompt context.
+            prompt: The prompt for the model the complete.
+            max_tokens: The maximum number of tokens to generate.
+            temp: The model temperature. Larger values increase creativity but decrease factuality.
+            top_k: Randomly sample from the top_k most likely tokens at each generation step. Set this to 1 for greedy decoding.
+            top_p: Randomly sample at each generation step from the top most likely tokens whose probabilities add up to top_p.
+            repeat_penalty: Penalize the model for repetition. Higher values result in less repetition.
+            repeat_last_n: How far in the models generation history to apply the repeat penalty.
+            n_batch: Number of prompt tokens processed in parallel. Larger values decrease latency but increase resource requirements.
+            n_predict: Equivalent to max_tokens, exists for backwards compatibility.
+            streaming: If True, this method will instead return a generator that yields tokens as the model generates them.
 
         Returns:
-            Raw string of generated model response.
+            Either the entire completion or a generator that yields the completion token by token.
         """
-        return self.model.prompt_model(prompt, streaming=streaming, **generate_kwargs)
+        generate_kwargs = locals()
+        generate_kwargs.pop('self')
+        generate_kwargs.pop('max_tokens')
+        generate_kwargs.pop('streaming')
+        generate_kwargs['n_predict'] = max_tokens
+        if n_predict is not None:
+            generate_kwargs['n_predict'] = n_predict
 
-    def generator(self, prompt: str, **generate_kwargs) -> str:
-        """
-        Surfaced method of running generate without accessing model object.
+        # if prompt is not '':
+        #     if streaming and self._is_chat_session_activated:
+        #         raise NotImplementedError("Streaming tokens in a chat session is not currently supported.")
 
-        Args:
-            prompt: Raw string to be passed to model.
-            streaming: True if want output streamed to stdout.
-            **generate_kwargs: Optional kwargs to pass to prompt context.
+        #     if self._is_chat_session_activated:
+        #         self.current_chat_session.append({"role": "user", "content": prompt})
+        #         generate_kwargs['prompt'] = self._format_chat_prompt_template(messages=self.current_chat_session)
+        #         generate_kwargs['reset_context'] = len(self.current_chat_session) == 1
+        #     else:
+        #         generate_kwargs['reset_context'] = True
+        #     messages = self.current_chat_session
 
-        Returns:
-            Raw string of generated model response.
-        """
-        return self.model.generator(prompt, **generate_kwargs)
+        generate_kwargs['prompt'] = self._format_chat_prompt_template(messages=messages)
+        del generate_kwargs['messages']
+
+        if streaming:
+            return self.model.prompt_model_streaming(**generate_kwargs)
+
+        output = self.model.prompt_model(**generate_kwargs)
+
+        # if self._is_chat_session_activated:
+        #     self.current_chat_session.append({"role": "assistant", "content": output})
+
+        return output
+
+    # def generator(self, prompt: str, **generate_kwargs) -> str:
+    #     """
+    #     Surfaced method of running generate without accessing model object.
+
+    #     Args:
+    #         prompt: Raw string to be passed to model.
+    #         streaming: True if want output streamed to stdout.
+    #         **generate_kwargs: Optional kwargs to pass to prompt context.
+
+    #     Returns:
+    #         Raw string of generated model response.
+    #     """
+    #     return self.model.generator(prompt, **generate_kwargs)
 
     def chat_completion(self,
                         messages: List[Dict],
@@ -283,29 +350,24 @@ class GPT4All():
         """
         full_prompt = ""
 
+        sys_prompt = f"### Instruction: \n{ownprompt}\n"
+
         for message in messages:
             if message["role"] == "system":
-                system_message = message["content"] + "\n"
-                full_prompt += system_message
-
-        if default_prompt_header:
-            full_prompt += """### Instruction: 
-            The prompt below is a question to answer, a task to complete, or a conversation 
-            to respond to; decide which and write an appropriate response.
-            \n### Prompt: """
-
-        for message in messages:
-            if message["role"] == "user":
-                user_message = "\n" + message["content"]
+                sys_prompt = "\n### Instruction: " + message["content"]
+            elif message["role"] == "user":
+                user_message = "\n### Prompt: " + message["content"]
                 full_prompt += user_message
-            if message["role"] == "assistant":
+            elif message["role"] == "assistant":
                 assistant_message = "\n### Response: " + message["content"]
                 full_prompt += assistant_message
-
+        
+        
         if default_prompt_footer:
-            full_prompt += "\n### Response:"
+            full_prompt += "### Response:"
 
-        return full_prompt
+        return f"""{sys_prompt}\n{full_prompt}"""
+        # return f"""{sys_prompt}\n{full_prompt}"""
 
     @staticmethod
     def remove_until_word(text, word):
