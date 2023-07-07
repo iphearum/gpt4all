@@ -1,3 +1,3 @@
 git add .
 git commit -m"upgrade api"
-git push gpt main
+git push gpt master

@@ -1,2 +1,2 @@
-git pull origin main
+git pull origin master
 sh docker-run.sh
