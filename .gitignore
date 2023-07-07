@@ -2,6 +2,7 @@ app.py
 .ipynb_checkpoints
 app-*.py
 gpt4.py
+.venv
 *.ipynb
 gpt4bin
 __pycache__
