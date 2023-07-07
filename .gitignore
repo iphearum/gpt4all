@@ -1,3 +1,8 @@
 app.py
-nonopenai
 .ipynb_checkpoints
+app-*.py
+gpt4.py
+*.ipynb
+gpt4
+__pycache__
+models
