@@ -19,8 +19,8 @@ models = [
 
     # needed for download
     # {"filename": "ggml-gpt4all-l13b-snoozy.bin"},
-    {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
-    # {"filename": "ggml-mpt-7b-chat.bin"},
+    # {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
+    {"filename": "ggml-mpt-7b-chat.bin"},
 ]
 # MODELPATH = "/models/"
 MODELPATH = "../models/gpt4all/"
