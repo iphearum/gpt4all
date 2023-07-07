@@ -22,7 +22,8 @@ models = [
     {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
     # {"filename": "ggml-mpt-7b-chat.bin"},
 ]
-MODELPATH = "../models/gpt4all/"
+MODELPATH = "/models/"
+# MODELPATH = "../models/gpt4all/"
 for i in models:
     llm = GPT4All(i['filename'],MODELPATH)
 
