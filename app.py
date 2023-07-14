@@ -18,6 +18,7 @@ models = [
     # {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
 
     # needed for download
+    # {"filename": "orca-mini-3b.ggmlv3.q4_0.bin"},
     # {"filename": "ggml-gpt4all-l13b-snoozy.bin"},
     # {"filename": "ggml-gpt4all-j-v1.3-groovy.bin"},
     {"filename": "ggml-mpt-7b-chat.bin"},
@@ -26,6 +27,7 @@ models = [
 MODELPATH = "../models/gpt4all/"
 for i in models:
     llm = GPT4All(i['filename'],MODELPATH)
+    # llm = GPT4All(f"../models/gpt4all/{i['filename']}")
 
 public_key = "pJNAtlAqCHbUDTrDudubjSKeUVgbOMvkRQWMLtscqsdiKmhI"
 
